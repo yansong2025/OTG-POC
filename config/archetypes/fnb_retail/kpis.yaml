@@ -1,0 +1,125 @@
+# What the dashboard shows for F&B / retail clients.
+# KPI calculators live in core/kpis.py, action rules in core/rules.py.
+# Targets are per month; weekly targets are scaled automatically.
+
+labels:              # how generic model words appear in this industry
+  site: Outlet
+  customer: Member
+  resource: Staff
+  txn: Order
+
+kpis:
+  - id: revenue
+    name: Revenue
+    calc: sum
+    txn_type: order
+    where: "status == 'completed'"
+    field: amount
+    unit: SGD
+    direction: up
+    target: 112000
+    amber_pct: 5
+
+  - id: orders
+    name: Orders
+    calc: count
+    txn_type: order
+    where: "status == 'completed'"
+    unit: count
+    direction: up
+    target: 11500
+    amber_pct: 5
+
+  - id: avg_ticket
+    name: Average spend per order
+    calc: mean
+    txn_type: order
+    where: "status == 'completed'"
+    field: amount
+    unit: SGD
+    direction: up
+    target: 10.0
+    amber_pct: 3
+
+  - id: gross_margin
+    name: Gross margin
+    calc: line_margin_pct
+    txn_type: order
+    where: "status == 'completed'"
+    unit: "%"
+    direction: up
+    target: 62
+    amber_pct: 2
+
+  - id: member_share
+    name: Orders by loyalty members
+    calc: share
+    txn_type: order
+    where: "status == 'completed'"
+    numerator: "customer_id.notna()"
+    unit: "%"
+    direction: up
+    target: 30
+    amber_pct: 5
+
+  - id: orders_per_labour_hour
+    name: Orders per staff hour
+    calc: per_shift_hour
+    txn_type: order
+    where: "status == 'completed'"
+    unit: ratio
+    direction: up
+    target: 1.1
+    amber_pct: 8
+
+actions:
+  - id: understaffed
+    title: Understaffed hours
+    why: Hours where each person on shift handles more orders than the comfortable maximum (last 4 weeks).
+    rule: understaffed
+    params: {txn_type: order, weeks: 4, max_per_staff: 3.0}
+
+  - id: outlets_attention
+    title: Outlets needing attention
+    why: Outlets whose revenue in the last 4 weeks fell clearly below their own previous 8 weeks.
+    rule: site_decline
+    params: {txn_type: order, field: amount, recent_weeks: 4, baseline_weeks: 8, drop_pct: 10}
+
+  - id: promos
+    title: Promotions eroding margin
+    why: Promo codes whose orders earn a clearly lower gross margin than orders without a promo (last 8 weeks).
+    rule: margin_gap
+    params: {txn_type: order, group_by: promo_code, weeks: 8, min_gap_pts: 5}
+
+# Location page (Smart City view): panels are drawn in this order
+location:
+  - panel: site_points
+    title: Outlet performance by area
+    why: Bubble size = weekly revenue (last 4 weeks). Colour = change vs the 8 weeks before.
+    txn_type: order
+    where: "status == 'completed'"
+
+# D5: 4-week forecast
+forecast:
+  title: Orders per outlet, next 4 weeks
+  txn_type: order
+  where: "status == 'completed'"
+  group_by: site_id
+
+# UAT decision tasks: the answer is computed live from the data
+tasks:
+  - question: Which outlet needs attention this week?
+    source: {action: outlets_attention}
+    answer_columns: [site_id, change_pct]
+    top: 1
+    excel_hint: "Sheet sunbird_order: filter status = completed, pivot revenue by outlet and week, compare the last 4 weeks with the 8 before."
+  - question: At which outlet and hour on weekdays is staff most stretched?
+    source: {action: understaffed}
+    answer_columns: [site_id, day_type, time, orders_per_staff]
+    top: 1
+    excel_hint: "Sheets sunbird_order and sunbird_shift: count orders per outlet per hour, count staff on shift per hour, divide."
+  - question: Which promotion is not worth running?
+    source: {action: promos}
+    answer_columns: [promo_code, margin_pct, baseline_margin_pct]
+    top: 1
+    excel_hint: "Sheets sunbird_order + sunbird_line_item + sunbird_product_service: margin = (price after discount - cost) per promo code."

@@ -1,0 +1,24 @@
+planning_area,region,lat,lon,postal_sectors
+Ang Mo Kio,North-East,1.3691,103.8454,56
+Bedok,East,1.3236,103.9273,46|47
+Bishan,Central,1.3526,103.8352,57
+Bukit Batok,West,1.3590,103.7637,65
+Bukit Merah,Central,1.2819,103.8239,15|16
+Choa Chu Kang,West,1.3840,103.7470,68
+Clementi,West,1.3162,103.7649,12|13
+Downtown Core,Central,1.2789,103.8536,01|04|06
+Geylang,Central,1.3201,103.8918,38|39
+Hougang,North-East,1.3612,103.8863,53
+Jurong East,West,1.3329,103.7436,60
+Jurong West,West,1.3404,103.7090,61|62|64
+Kallang,Central,1.3100,103.8651,32|33
+Pasir Ris,East,1.3721,103.9474,51
+Punggol,North-East,1.3984,103.9072,82
+Queenstown,Central,1.2942,103.7861,14
+Sembawang,North,1.4491,103.8185,75
+Sengkang,North-East,1.3868,103.8914,54
+Serangoon,North-East,1.3554,103.8679,55
+Tampines,East,1.3496,103.9568,52
+Toa Payoh,Central,1.3343,103.8563,31
+Woodlands,North,1.4382,103.7890,73
+Yishun,North,1.4304,103.8354,76

@@ -1,0 +1,149 @@
+# What the dashboard shows for field-service clients.
+# KPI calculators live in core/kpis.py, action rules in core/rules.py.
+# Targets are per month; weekly targets are scaled automatically.
+
+labels:
+  site: Customer site
+  customer: Customer
+  resource: Technician
+  txn: Job
+
+kpis:
+  - id: jobs_completed
+    name: Jobs completed
+    calc: count
+    txn_type: job
+    where: "status == 'completed'"
+    unit: count
+    direction: up
+    target: 700
+    amber_pct: 5
+
+  - id: job_revenue
+    name: Job value completed
+    calc: sum
+    txn_type: job
+    where: "status == 'completed'"
+    field: amount
+    unit: SGD
+    direction: up
+    target: 190000
+    amber_pct: 5
+
+  - id: repeat_rate
+    name: Repeat-visit rate (repairs)
+    calc: share
+    txn_type: job
+    where: "status != 'cancelled' and category in ['Repair', 'Gas top-up']"
+    numerator: "is_repeat == 1"
+    unit: "%"
+    direction: down
+    target: 10
+    amber_pct: 15
+
+  - id: unbilled_value
+    name: Completed but not invoiced
+    calc: missing_child
+    txn_type: job
+    where: "status == 'completed'"
+    child_type: invoice
+    unit: SGD
+    direction: down
+    target: 5000
+    amber_pct: 25
+
+  - id: overdue_receivables
+    name: Overdue receivables (end of period)
+    calc: overdue_balance
+    txn_type: invoice
+    unit: SGD
+    direction: down
+    target: 60000
+    amber_pct: 20
+
+  - id: jobs_per_technician
+    name: Jobs per technician
+    calc: per_resource
+    txn_type: job
+    where: "status == 'completed'"
+    resource_type: technician
+    unit: count
+    direction: up
+    target: 58
+    amber_pct: 5
+
+actions:
+  - id: unbilled
+    title: Completed jobs not yet invoiced
+    why: Work that was done more than 7 days ago but has no invoice, so we have not been paid for it.
+    rule: missing_child
+    params: {parent_type: job, parent_status: completed, child_type: invoice, min_age_days: 7}
+
+  - id: repeat_jobs
+    title: Repeat jobs to investigate
+    why: Sites that needed the same repair again within 30 days (last 60 days). Often a sign the first fix did not hold.
+    rule: repeat_sites
+    params: {txn_type: job, lookback_days: 60}
+
+  - id: overdue_customers
+    title: Overdue customers
+    why: Customers with invoices more than 14 days past due. "Growing" means more is overdue now than 30 days ago.
+    rule: overdue
+    params: {txn_type: invoice, min_days_overdue: 14}
+
+# Location page (Smart City view): panels are drawn in this order
+location:
+  - panel: capacity
+    title: Technician coverage vs demand
+    why: Areas ranked by jobs per week per technician based within 6 km (last 8 weeks).
+    txn_type: job
+    where: "status != 'cancelled'"
+    resource_type: technician
+    radius_km: 6
+  - panel: area_bubbles
+    title: Job demand by planning area
+    why: Bubble size = jobs in the last 8 weeks. Colour = growth vs the 8 weeks before.
+    txn_type: job
+    where: "status != 'cancelled'"
+    colour_by: growth_pct
+  - panel: area_bubbles
+    title: Repeat-job hotspots
+    why: Bubble size = jobs in the last 8 weeks. Colour = share of them that were repeat visits.
+    txn_type: job
+    where: "status != 'cancelled'"
+    colour_by: repeat_pct
+
+# D5: 4-week forecast
+forecast:
+  title: Jobs per planning area, next 4 weeks
+  txn_type: job
+  where: "status != 'cancelled'"
+  group_by: planning_area
+
+# D5: credit-risk score (points add up; reasons are shown to the user)
+risk:
+  txn_type: invoice
+  rules:
+    - {when: "late_recent > 30", points: 30, reason: "Paid {late_recent:.0f} days late on average (last 90 days)"}
+    - {when: "late_recent > 14 and late_recent <= 30", points: 15, reason: "Paid {late_recent:.0f} days late on average (last 90 days)"}
+    - {when: "late_change > 10", points: 25, reason: "Paying {late_change:.0f} days later than in the 3 months before"}
+    - {when: "oldest_overdue_days > 60", points: 20, reason: "An invoice is {oldest_overdue_days:.0f} days overdue"}
+  levels: {high: 50, medium: 25}
+
+tasks:
+  - question: Which planning area most needs more technician capacity?
+    source: {capacity: 0}
+    answer_columns: [planning_area, per_week_per_worker, workers_nearby]
+    top: 1
+    excel_hint: "Sheets tidewell_job + tidewell_site + tidewell_resource: jobs per area (last 8 weeks) vs technicians based nearby."
+  - question: List the completed jobs that have not been invoiced (how many, and total value?)
+    source: {action: unbilled}
+    answer_summary: {count: item, total: amount}
+    answer_columns: [source_ref, amount]
+    top: 5
+    excel_hint: "Sheets tidewell_job + tidewell_invoice: completed jobs whose job number never appears as an invoice's parent."
+  - question: Which planning area has the most repeat jobs?
+    source: {area: 0, sort_by: repeats}
+    answer_columns: [planning_area, repeats, repeat_pct]
+    top: 1
+    excel_hint: "Sheets tidewell_job + tidewell_site: count is_repeat = 1 jobs (last 8 weeks) by the site's planning area."

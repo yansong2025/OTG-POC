@@ -1,0 +1,36 @@
+# Demo tenants (all fictional) and their demo users.
+#
+# archetype      -> which folder in config/archetypes/ holds the mapping + KPI config
+# sample_source  -> which fake "client system" in sample_sources/ produces raw data.
+#                   A real client would instead drop their exported CSVs into
+#                   data/raw/<tenant_id>/ and leave sample_source out.
+#
+# All demo users have the password "demo" (see SECURITY_NOTES.md).
+
+tenants:
+  # F&B tenant switched off for the sponsor demo (field service + B2B only).
+  # Its config and fake data source are kept: uncomment these lines and run
+  # `python generate_data.py` to bring it back.
+  # - tenant_id: sunbird
+  #   name: Sunbird Kitchens (demo)
+  #   archetype: fnb_retail
+  #   sample_source: fnb_retail
+  #   users:
+  #     - {username: fnb.owner,   role: owner,   display_name: "Sunbird owner"}
+  #     - {username: fnb.manager, role: manager, display_name: "Sunbird outlet manager"}
+
+  - tenant_id: tidewell
+    name: Tidewell Aircon Services (demo)
+    archetype: field_service
+    sample_source: field_service
+    users:
+      - {username: fs.owner,   role: owner,   display_name: "Tidewell director"}
+      - {username: fs.manager, role: manager, display_name: "Tidewell operations manager"}
+
+  - tenant_id: meridian
+    name: Meridian Supply Co (demo)
+    archetype: b2b_distribution
+    sample_source: b2b_distribution
+    users:
+      - {username: b2b.owner,   role: owner,   display_name: "Meridian director"}
+      - {username: b2b.manager, role: manager, display_name: "Meridian sales manager"}

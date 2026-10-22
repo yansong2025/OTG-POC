@@ -1,0 +1,95 @@
+# Mapping: F&B / retail POS export  ->  common data model
+# Format is explained in MAPPING_GUIDE.md.
+
+archetype: fnb_retail
+label: Multi-outlet F&B / retail
+
+tables:
+  - source: outlets.csv
+    target: site
+    columns:
+      site_id: OutletCode
+      name: OutletName
+      postal_code: Postal
+    constants:
+      site_type: outlet
+
+  - source: menu.csv
+    target: product_service
+    columns:
+      product_id: ItemCode
+      name: ItemName
+      category: Category
+      unit_price: Price
+      unit_cost: FoodCost
+
+  - source: members.csv
+    target: customer
+    columns:
+      customer_id: MemberNo
+      name: MemberName
+      phone: Mobile
+      email: Email
+      segment: Tier
+      first_seen: JoinDate
+    values:
+      segment: {gold: gold, silver: silver, basic: basic}
+    date_formats:
+      first_seen: "%d/%m/%Y"
+
+  - source: staff.csv
+    target: resource
+    columns:
+      resource_id: StaffNo
+      name: StaffName
+      site_id: HomeOutlet
+      skill: Role
+    constants:
+      resource_type: staff
+
+  - source: roster.csv
+    target: shift
+    columns:
+      shift_id: RosterId
+      resource_id: StaffNo
+      site_id: OutletCode
+      start_at: [ShiftDate, ShiftStart]     # two raw columns joined into one datetime
+      end_at: [ShiftDate, ShiftEnd]
+    date_formats:
+      start_at: "%d/%m/%Y %H:%M"
+      end_at: "%d/%m/%Y %H:%M"
+
+  - source: pos_receipts.csv
+    target: txn
+    columns:
+      txn_id: ReceiptNo
+      source_ref: ReceiptNo
+      site_id: OutletCode
+      customer_id: MemberNo
+      resource_id: CashierNo
+      created_at: TxnDateTime
+      completed_at: TxnDateTime
+      amount: ReceiptTotal
+      status: Status
+      promo_code: PromoCode
+      category: Channel
+    constants:
+      type: order
+    values:
+      status: {paid: completed, void: cancelled, refunded: cancelled}
+      category: {dine-in: dine_in, dine in: dine_in, takeaway: takeaway, delivery: delivery}
+    date_formats:
+      created_at: "%d/%m/%Y %H:%M"
+      completed_at: "%d/%m/%Y %H:%M"
+
+  - source: pos_receipt_lines.csv
+    target: line_item
+    columns:
+      line_id: LineId
+      txn_id: ReceiptNo
+      product_id: ItemCode
+      qty: Qty
+      unit_price: UnitPrice
+      discount_pct: LineDiscPct
+    defaults:
+      discount_pct: 0

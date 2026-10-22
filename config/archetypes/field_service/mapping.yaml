@@ -1,0 +1,90 @@
+# Mapping: field-service job management export  ->  common data model
+# Format is explained in MAPPING_GUIDE.md.
+
+archetype: field_service
+label: Field service
+
+tables:
+  - source: technicians.csv
+    target: resource
+    columns:
+      resource_id: tech_code
+      name: tech_name
+      home_area: base_area
+      skill: skill
+    constants:
+      resource_type: technician
+
+  - source: customers.csv
+    target: customer
+    columns:
+      customer_id: cust_id
+      name: cust_name
+      phone: contact_no
+      email: email_addr
+      segment: cust_type
+      first_seen: since
+    values:
+      segment: {contract: contract, adhoc: ad-hoc, ad-hoc: ad-hoc}
+
+  - source: sites.csv
+    target: site
+    columns:
+      site_id: site_code
+      name: site_label
+      customer_id: cust_id
+      postal_code: address_postal
+    constants:
+      site_type: customer_site
+
+  - source: jobs.csv
+    target: txn
+    columns:
+      txn_id: job_no
+      source_ref: job_no
+      site_id: site_code
+      customer_id: cust_id
+      resource_id: tech_code
+      category: job_type
+      status: job_status
+      created_at: job_date
+      completed_at: completed_on
+      amount: job_value
+    constants:
+      type: job
+    values:
+      status: {completed: completed, done: completed, scheduled: scheduled, "in progress": scheduled, cancelled: cancelled}
+
+  - source: invoices.csv
+    target: txn
+    columns:
+      txn_id: inv_no
+      source_ref: inv_no
+      parent_txn_id: job_no
+      created_at: inv_date
+      due_date: due_on
+      amount: inv_amount
+    constants:
+      type: invoice
+      status: issued
+
+  - source: payments.csv
+    target: txn
+    columns:
+      txn_id: pay_ref
+      source_ref: pay_ref
+      parent_txn_id: inv_no
+      created_at: paid_date
+      amount: paid_amt
+    constants:
+      type: payment
+      status: completed
+
+# Derived fields, computed after mapping (generic rules in core/mapping.py)
+derive:
+  # copy site/customer from the parent document onto invoices and payments
+  inherit_from_parent: [site_id, customer_id]
+  # an invoice's paid_at = date of its payment
+  paid_at_from_child: {parent_type: invoice, child_type: payment}
+  # a repair/top-up is a "repeat" if the same site needed the same fix within 30 days
+  repeat: {type: job, key: [site_id, category], window_days: 30, categories: [Repair, Gas top-up]}

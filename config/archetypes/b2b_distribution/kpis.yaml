@@ -1,0 +1,128 @@
+# What the dashboard shows for B2B distribution clients.
+# KPI calculators live in core/kpis.py, action rules in core/rules.py.
+# Targets are per month; weekly targets are scaled automatically.
+
+labels:
+  site: Delivery site
+  customer: Customer
+  resource: Sales rep
+  txn: Quotation
+
+kpis:
+  - id: sales
+    name: Sales orders won
+    calc: sum
+    txn_type: sales_order
+    field: amount
+    unit: SGD
+    direction: up
+    target: 1600000
+    amber_pct: 5
+
+  - id: quotes_issued
+    name: Quotations issued
+    calc: count
+    txn_type: quotation
+    unit: count
+    direction: up
+    target: 280
+    amber_pct: 5
+
+  - id: win_rate
+    name: Quotation win rate
+    calc: share
+    txn_type: quotation
+    where: "status in ['won', 'lost']"
+    numerator: "status == 'won'"
+    unit: "%"
+    direction: up
+    target: 45
+    amber_pct: 5
+
+  - id: avg_discount
+    name: Average discount given
+    calc: mean
+    txn_type: quotation
+    field: discount_pct
+    unit: "%"
+    direction: down
+    target: 7
+    amber_pct: 10
+
+  - id: won_margin
+    name: Gross margin on won quotes
+    calc: line_margin_pct
+    txn_type: quotation
+    where: "status == 'won'"
+    unit: "%"
+    direction: up
+    target: 27
+    amber_pct: 5
+
+  - id: overdue_receivables
+    name: Overdue receivables (end of period)
+    calc: overdue_balance
+    txn_type: invoice
+    unit: SGD
+    direction: down
+    target: 300000
+    amber_pct: 20
+
+actions:
+  - id: quotes_to_chase
+    title: Quotations to chase
+    why: Open quotations older than 5 days, ranked by value x how often this customer usually says yes.
+    rule: open_quotes
+    params: {txn_type: quotation, min_age_days: 5}
+
+  - id: overdue_customers
+    title: Overdue customers
+    why: Customers with invoices past their due date. "Growing" means more is overdue now than 30 days ago.
+    rule: overdue
+    params: {txn_type: invoice}
+
+  - id: discount_creep
+    title: Discounts creeping up
+    why: Sales reps whose average discount in the last 60 days is clearly above their previous 6 months.
+    rule: discount_trend
+    params: {txn_type: quotation, recent_days: 60, baseline_days: 180, min_increase_pts: 3}
+
+# Location page (Smart City view): panels are drawn in this order
+location:
+  - panel: customer_risk
+    title: Customers by area, coloured by credit risk
+    why: One dot per customer delivery site. Colour = credit-risk level from the Forecast & risk page.
+
+# D5: 4-week forecast
+forecast:
+  title: Enquiries per customer group, next 4 weeks
+  txn_type: enquiry
+  group_by: segment
+
+# D5: credit-risk score (points add up; reasons are shown to the user)
+risk:
+  txn_type: invoice
+  rules:
+    - {when: "late_recent > 30", points: 30, reason: "Paid {late_recent:.0f} days late on average (last 90 days)"}
+    - {when: "late_recent > 14 and late_recent <= 30", points: 15, reason: "Paid {late_recent:.0f} days late on average (last 90 days)"}
+    - {when: "late_change > 10", points: 25, reason: "Paying {late_change:.0f} days later than in the 3 months before"}
+    - {when: "overdue_pct_of_limit > 50", points: 25, reason: "Overdue amount is {overdue_pct_of_limit:.0f}% of the credit limit"}
+    - {when: "oldest_overdue_days > 60", points: 20, reason: "An invoice is {oldest_overdue_days:.0f} days overdue"}
+  levels: {high: 50, medium: 25}
+
+tasks:
+  - question: Which 5 open quotations should the team chase first?
+    source: {action: quotes_to_chase, where: "days_to_expiry >= 0"}
+    answer_columns: [source_ref, customer_id, amount]
+    top: 5
+    excel_hint: "Sheet meridian_quotation: status = open, older than 5 days, not expired; rank by amount x the customer's past win rate."
+  - question: Which customers are becoming a credit risk?
+    source: {risk: high}
+    answer_columns: [customer_id, score]
+    top: 10
+    excel_hint: "Sheet meridian_invoice: days late per invoice (paid date or today - due date); compare last 90 days with the 90 before."
+  - question: Which sales rep's discounts are eroding margin?
+    source: {action: discount_creep}
+    answer_columns: [resource_id, recent_avg_discount, earlier_avg_discount]
+    top: 1
+    excel_hint: "Sheet meridian_quotation: average discount per sales rep, last 60 days vs the 6 months before."

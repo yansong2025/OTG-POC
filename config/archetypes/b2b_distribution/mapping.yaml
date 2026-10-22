@@ -1,0 +1,162 @@
+# Mapping: B2B distributor ERP export  ->  common data model
+# Format is explained in MAPPING_GUIDE.md.
+
+archetype: b2b_distribution
+label: B2B distribution
+
+# Customers here are companies, so the company name is not personal data and can
+# be shown. Contact phone/email still are. (Default if left out: name, phone, email.)
+personal_fields:
+  customer: [phone, email]
+  resource: [name]
+
+tables:
+  # CONTACT_PERSON is deliberately not imported: we don't need it for any
+  # decision (PDPA data minimisation).
+  - source: CUSTOMER_MASTER.csv
+    target: customer
+    columns:
+      customer_id: CUSTNO
+      name: CUSTNAME
+      phone: TEL
+      email: EMAIL
+      segment: CUST_GROUP
+      first_seen: OPEN_DATE
+      credit_limit: CREDIT_LIMIT
+    text_case:
+      name: title
+    date_formats:
+      first_seen: "%Y%m%d"
+
+  # The same file also gives us each customer's delivery location
+  - source: CUSTOMER_MASTER.csv
+    target: site
+    columns:
+      site_id: CUSTNO
+      customer_id: CUSTNO
+      name: CUSTNAME
+      postal_code: POSTCODE
+    text_case:
+      name: title
+    constants:
+      site_type: customer_site
+
+  - source: SALESPERSON.csv
+    target: resource
+    columns:
+      resource_id: SP_CODE
+      name: SP_NAME
+    constants:
+      resource_type: sales_rep
+
+  - source: ITEM_MASTER.csv
+    target: product_service
+    columns:
+      product_id: ITEMNO
+      name: DESCRIPTION
+      category: ITEM_CAT
+      unit_price: LIST_PRICE
+      unit_cost: STD_COST
+
+  - source: ENQUIRY.csv
+    target: txn
+    columns:
+      txn_id: ENQ_NO
+      source_ref: ENQ_NO
+      customer_id: CUSTNO
+      site_id: CUSTNO
+      resource_id: SP_CODE
+      category: CHANNEL
+      created_at: ENQ_DATE
+    constants:
+      type: enquiry
+      status: completed
+    date_formats:
+      created_at: "%Y%m%d"
+
+  - source: QUOTE_HDR.csv
+    target: txn
+    columns:
+      txn_id: QUOTE_NO
+      source_ref: QUOTE_NO
+      parent_txn_id: ENQ_NO
+      customer_id: CUSTNO
+      site_id: CUSTNO
+      resource_id: SP_CODE
+      created_at: QUOTE_DATE
+      due_date: VALID_UNTIL
+      status: QUOTE_STATUS
+      amount: TOTAL_AMT
+      discount_pct: DISC_PCT
+    constants:
+      type: quotation
+    values:
+      status: {open: open, won: won, lost: lost, expired: lost}
+    date_formats:
+      created_at: "%Y%m%d"
+      due_date: "%Y%m%d"
+
+  - source: QUOTE_LINE.csv
+    target: line_item
+    columns:
+      line_id: [QUOTE_NO, LINE]       # no single line id in the source: build one
+      txn_id: QUOTE_NO
+      product_id: ITEMNO
+      qty: QTY
+      unit_price: UNIT_PRICE
+      discount_pct: DISC_PCT
+    join_with: "-"
+    defaults:
+      discount_pct: 0
+
+  - source: SO_HDR.csv
+    target: txn
+    columns:
+      txn_id: SO_NO
+      source_ref: SO_NO
+      parent_txn_id: QUOTE_NO
+      customer_id: CUSTNO
+      site_id: CUSTNO
+      created_at: SO_DATE
+      amount: SO_AMT
+    constants:
+      type: sales_order
+      status: completed
+    date_formats:
+      created_at: "%Y%m%d"
+
+  - source: INVOICE.csv
+    target: txn
+    columns:
+      txn_id: INV_NO
+      source_ref: INV_NO
+      parent_txn_id: SO_NO
+      customer_id: CUSTNO
+      site_id: CUSTNO
+      created_at: INV_DATE
+      due_date: DUE_DATE
+      amount: INV_AMT
+    constants:
+      type: invoice
+      status: issued
+    date_formats:
+      created_at: "%Y%m%d"
+      due_date: "%Y%m%d"
+
+  - source: RECEIPT.csv
+    target: txn
+    columns:
+      txn_id: RCPT_NO
+      source_ref: RCPT_NO
+      parent_txn_id: INV_NO
+      created_at: RCPT_DATE
+      amount: RCPT_AMT
+    constants:
+      type: payment
+      status: completed
+    date_formats:
+      created_at: "%Y%m%d"
+
+derive:
+  inherit_from_parent: [site_id, customer_id, resource_id]
+  paid_at_from_child: {parent_type: invoice, child_type: payment}
